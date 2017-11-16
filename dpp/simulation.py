@@ -24,7 +24,7 @@ class Simulation(object):
             flows_come_in_current_time = []
             for _ in range(flow_num):
                 src_num, dst_num = self.generate_random_src_dst_pair()
-                start_time = self.generate_random_start_time()
+                start_time = current_time
                 finish_time = start_time + self.generate_random_exist_time()
                 bandwidth = self.generate_random_bandwidth()
 
@@ -36,10 +36,10 @@ class Simulation(object):
 
     def generate_random_src_dst_pair(self):
         node_num = self.graph.__len__()
-        src_num = random.randint(0, node_num - 1)
-        dst_num = random.randint(0, node_num - 1)
+        src_num = random.randint(1, node_num)
+        dst_num = random.randint(1, node_num)
         while src_num == dst_num:
-            dst_num = random.randint(0, node_num - 1)
+            dst_num = random.randint(1, node_num)
 
         return src_num, dst_num
 
@@ -48,7 +48,7 @@ class Simulation(object):
 
     def generate_random_exist_time(self):
         # TODO still need to discuss
-        return random.randint(0, self.total_time)
+        return random.randint(0, 2)
 
     def generate_random_bandwidth(self):
         return random.randint(0, self.max_bandwidth)
@@ -66,16 +66,23 @@ class Simulation(object):
                 if not paths:
                     rejected_flows.append(flow)
                 else:
-                    current_flows.put(flow.finish_time, paths)
+                    current_flows.put((flow.finish_time, paths))
             # cleanup finished flows
             if not current_flows.empty():
-                while current_flows.queue[0][0] == current_time:
-                    paths = current_flows.get()
+                while not current_flows.empty() and current_flows.queue[0][0] == current_time:
+                    paths = current_flows.get()[1]
                     self.remove_paths(paths)
             # calculate spectrum utilization per round
             spectrum_utilization_per_sec.append(self.calculate_spectrum_utilization(total_spectrum))
         # calculate block rate
-        block_rate = self.calculate_block_rate()
+        block_rate = self.calculate_block_rate(rejected_flows)
+        print('Block Rate: %f' % block_rate)
+        print('Spectrum Utilization: '),
+        print(spectrum_utilization_per_sec)
+        for e in self.graph.edges(data=True):
+            print(e)
+        print(reduce(lambda x, y: x + len(y), self.flows, 0))
+        print(len(rejected_flows))
 
     def remove_paths(self, paths):
         for path, start_index, total_num in paths:
@@ -86,8 +93,10 @@ class Simulation(object):
                     spectrum_slots[j] = 0
 
     def calculate_block_rate(self, rejected_flows):
-        blocked_bandwidth = reduce(lambda x, y: x + y.bandwidth, rejected_flows)
-        total_bandwidth = reduce(lambda x, y: x + y.bandwidth, self.flows)
+        blocked_bandwidth = reduce(lambda x, y: x + y.bandwidth, rejected_flows, 0)
+        total_bandwidth = 0
+        for flows in self.flows:
+            total_bandwidth = reduce(lambda x, y: x + y.bandwidth, flows, total_bandwidth)
 
         return blocked_bandwidth / total_bandwidth
 

@@ -1,13 +1,11 @@
 import math
-import copy
 
-total_slots = 10  # the number of total slots
 uni_slot_size = 12.5  # the size of uni slot(GHz)
+
 
 def routing_and_spectrum(graph, paths, required_bandwidth):
     slots_num = get_slots_num(required_bandwidth)
-    print "the number of slots is %s" % slots_num
-    print "shortest path %s" %paths
+    print "the number of required slots is %s" % slots_num
     sorted_paths = sort_all_k_shortest_paths(paths, graph)
     print "sorted paths ",
     print sorted_paths
@@ -16,22 +14,28 @@ def routing_and_spectrum(graph, paths, required_bandwidth):
     paths_occupied_spectrum = []
 
     #allocate the slots to multiple path
-    backup = False
     for path in sorted_paths:
-        central_frequency, path_occupied_spectrum = assign_spectrum(graph, path, slots_num, backup)
+        central_frequency, start_localization = assign_spectrum(graph, path, slots_num)
         print "central frequency %s" % central_frequency
+
         if central_frequency is None:
-            break
+            continue
         else:
-            backup = True
+            path_occupied_spectrum = (path, start_localization, slots_num)
             paths_occupied_spectrum.append(path_occupied_spectrum)
             central_frequency_list.append(central_frequency)
+            if len(paths_occupied_spectrum) == 2:
+                break
 
-    if len(paths_occupied_spectrum) <= 3:
+    if len(paths_occupied_spectrum) < 2:
         print "the number of routing path is %d" % len(paths_occupied_spectrum)
+        return None
+
+    set_links_slots(paths_occupied_spectrum, graph)
     return paths_occupied_spectrum
 
-def get_slots_num(required_bandwidth):
+
+def get_slots_num (required_bandwidth):
     """
         Calculate the number of slots for required bandwidth
         the guard band is 1.
@@ -40,15 +44,15 @@ def get_slots_num(required_bandwidth):
     return int(slots_num)
 
 
-def assign_spectrum(graph, path, slots_num, backup):
+def assign_spectrum(graph, path, slots_num):
     path_slots_list = get_spectrum_slots_list(path, graph)
 
-    print "the slot lists of the path",
-    print path_slots_list
+    # print "the slot lists of the path",
+    # print path_slots_list
 
     slot_list = [sum(x) for x in zip(*path_slots_list)]
-    print "the sum of the slot lists of the path",
-    print slot_list
+    # print "the sum of the slot lists of the path",
+    # print slot_list
 
     continous_slots = 0
     localization = 0
@@ -60,48 +64,49 @@ def assign_spectrum(graph, path, slots_num, backup):
                 break
         else:
             continous_slots = 0
+    if continous_slots != slots_num:
+        return None, None
 
     start_localization = localization - slots_num
 
     central_frequency = get_central_frequency(start_localization, slots_num)
-    set_links_slots(path, start_localization, slots_num, graph, backup)
-    path_occupied_spectrum = (path, start_localization, slots_num)
 
-    if localization is not None:
-        return central_frequency, path_occupied_spectrum
-    else:
-        return None
+    return central_frequency, start_localization
 
 
 def get_central_frequency(localization, slots_num):
     return 193.11 + (localization + slots_num) * 6.25
 
 
-def set_links_slots(path, localization, slots_num, graph, backup=False):
-    hops = len(path)
-    for n in slots_num:
-        for i in range(hops - 1):
-            if backup:
-                graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] = 2
-            else:
-                graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] = 1
+def set_links_slots(paths_occupied_spectrum, graph):
+    backup = False
+    for path, localization, slots_num in paths_occupied_spectrum:
+        hops = len(path)
+        for n in range(slots_num):
+            for i in range(hops - 1):
+                if backup:
+                    graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] = 2
+                else:
+                    graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] = 1
+        backup = True
 
 def sort_all_k_shortest_paths(shortest_paths, graph):
     """
         Sort k paths
     """
+    print "4.1: sort the shortest path through the metric"
     sorted_metric_paths = []
     sorted_shortest_paths = []
+    metrics = []
     for path in shortest_paths:
-        print "path %s" % path
         metric = get_metric(path, graph)
-        print "metric %s" % metric
         metric_path = (metric, path)
         sorted_metric_paths.append(metric_path)
-    sorted(sorted_metric_paths)
-
+    sorted_metric_paths.sort(key=lambda x: x[0], reverse=True)
     for element in sorted_metric_paths:
         sorted_shortest_paths.append(element[1])
+        metrics.append(element[0])
+    print "metrics are %s" % metrics
     return sorted_shortest_paths
 
 
@@ -111,15 +116,18 @@ def get_metric(path, graph):
     free_spectrum = 0
     path_slots_list = get_spectrum_slots_list(path, graph)
     for slots_of_edge in path_slots_list:
-        free_spectrum += total_slots - sum(slots_of_edge)
+
+        free_spectrum += len(slots_of_edge) - sum([1 for _ in slots_of_edge if _ != 0])
 
     if free_spectrum is not None:
-        return (free_spectrum / (hops - 1))
+        return (free_spectrum /(hops - 1))
     else:
         print "No free spectrum"
+
 
 def get_spectrum_slots_list(path, graph):
     path_slots_list = []
     for i in range(len(path) - 1):
         path_slots_list.append(graph[path[i]][path[i+1]]['spectrum_slots'])
     return path_slots_list
+
