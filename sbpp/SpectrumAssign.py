@@ -5,11 +5,13 @@ uni_slot_size = 12.5  # the size of uni slot(GHz)
 
 
 def routing_and_spectrum(graph, paths, required_bandwidth):
-    slots_num = get_slots_num(required_bandwidth)
+    m = get_modulation(paths, graph)
+    print "modulation %d" %m
+    slots_num = get_slots_num(required_bandwidth, m)
     print "the number of required slots is %s" % slots_num
     sorted_paths = sort_all_k_shortest_paths(paths, graph)
-    print "sorted paths ",
-    print sorted_paths
+    # print "sorted paths ",
+    # print sorted_paths
 
     central_frequency_list = []
     paths_occupied_spectrum = []
@@ -18,7 +20,7 @@ def routing_and_spectrum(graph, paths, required_bandwidth):
     #allocate the slots to multiple path
     for path in sorted_paths:
         central_frequency, start_localization = assign_spectrum(graph, path, slots_num)
-        print "central frequency %s" % central_frequency
+        # print "central frequency %s" % central_frequency
         sorted_paths.remove(path)
         if central_frequency is None:
             continue
@@ -33,11 +35,9 @@ def routing_and_spectrum(graph, paths, required_bandwidth):
 
     _graph = copy.deepcopy(graph)
     inter_graph = modify_backup_path(_graph, working_path)
-    print "sorted paths for backup path",
-    print sorted_paths
     for path in sorted_paths:
         central_frequency, start_localization = assign_spectrum(inter_graph, path, slots_num, backup=True)
-        print "central frequency %s" % central_frequency
+        # print "central frequency %s" % central_frequency
         if central_frequency is None:
             continue
         else:
@@ -67,17 +67,38 @@ def modify_backup_path(graph, working_path):
                     for j in range(len(path) - 1):
                         for n in range(slots_num):
                             graph[path[j]][path[j+1]]['spectrum_slots'][loc + n] = 1
-    print "aaaaaaaaaaassssssssssssss"
-    print graph.edges(data=True)
+    # print "aaaaaaaaaaassssssssssssss"
+    # print graph.edges(data=True)
     return graph
 
 
-def get_slots_num (required_bandwidth):
+def get_modulation(paths, graph):
+    # M is 1, 2, 3 and 4 for BPSK, QPSK, 8-QAM and 16-QAM
+    # BPSK, QPSK, 8 - QAM, and 16 - QAM signals transmission reach: 9600km, 4800km, 2400km, and 1200km,
+    max_distance = 0
+    sum_distance = 0
+    for path in paths:
+        for i in range(len(path)-1):
+            sum_distance = sum_distance + graph[path[i]][path[i+1]]['weight']
+        if sum_distance > max_distance:
+            max_distance = sum_distance
+    if max_distance <= 1200:
+        m = 4
+    elif max_distance <= 2400:
+        m = 3
+    elif max_distance <= 4800:
+        m = 2
+    else:
+        m = 1
+    return m
+
+
+def get_slots_num (required_bandwidth, m):
     """
         Calculate the number of slots for required bandwidth
         the guard band is 1.
     """
-    slots_num = math.ceil(required_bandwidth / uni_slot_size) + 1
+    slots_num = math.ceil(required_bandwidth / (m * uni_slot_size)) + 1
     return int(slots_num)
 
 
@@ -120,7 +141,10 @@ def set_links_slots(paths_occupied_spectrum, graph):
         for n in range(slots_num):
             for i in range(hops - 1):
                 if backup:
-                    graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] = 2
+                    if graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] == 0:
+                        graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] = 2
+                    else:
+                        graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] = graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] + 1
                 else:
                     graph[path[i]][path[i + 1]]['spectrum_slots'][localization + n] = 1
         backup = True

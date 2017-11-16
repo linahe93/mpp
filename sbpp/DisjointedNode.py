@@ -9,7 +9,6 @@ Suurballe's algorithm
 def path_computing(graph, src, dst, k = 3):
     _graph = copy.deepcopy(graph)
     shortest_paths = link_disjoint_paths(_graph, src, dst, k)
-    print "shortest path %s" % shortest_paths
     return shortest_paths
 
 

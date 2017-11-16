@@ -48,7 +48,7 @@ class Simulation(object):
 
     def generate_random_exist_time(self):
         # TODO still need to discuss
-        return random.randint(0, 2)
+        return random.randint(0, 4)
 
     def generate_random_bandwidth(self):
         return random.randint(0, self.max_bandwidth)

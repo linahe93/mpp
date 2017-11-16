@@ -23,8 +23,11 @@ def algorithm(graph, flow):
         working_path = paths_occupied_spectrum[0][0]
         for i in range(len(working_path) - 1):
             graph[working_path[i]][working_path[i+1]].setdefault('flow', []).append(flow)
-            print graph[working_path[i]][working_path[i+1]]['flow']
+            graph[working_path[i+1]][working_path[i]].setdefault('flow', []).append(flow)
+            # print "add flow to working path",
+            # print graph[working_path[i]][working_path[i+1]]['flow']
 
-    print "the graph after the spectrum assignment %s" % graph.edges(data=True)
+    print "the graph after the spectrum assignment:"
+    print graph.edges(data=True)
     return paths_occupied_spectrum
 
