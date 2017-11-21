@@ -1,1 +1,1 @@
-multipath backup protection
+shared backup path protection
